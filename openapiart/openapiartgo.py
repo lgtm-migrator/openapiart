@@ -160,7 +160,7 @@ class OpenApiArtGo(OpenApiArtPlugin):
         """
         self._write("// {}".format(self._info))
         for line in self._license.split("\n"):
-            self._write("// {}".format(line))
+            self._write("// {}".format(line.encode('utf-8')))
         self._write()
 
     def _write_package(self):
