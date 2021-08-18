@@ -15,7 +15,7 @@ info:
       The license url will be used by OpenApiArt to add that content into 
       generated artifacts.
     name: MIT
-    url: https://raw.githubusercontent.com/open-traffic-generator/openapiart/main/LICENSE
+    url: https://opensource.org/licenses/MIT
 
 servers: 
   - url: /

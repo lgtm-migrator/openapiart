@@ -107,7 +107,7 @@ class OpenApiArtProtobuf(OpenApiArtPlugin):
     def _write_header(self, info_object):
         self._write("// {}".format(self._info))
         for line in self._license.split("\n"):
-            self._write("// {}".format(line.encode("utf-8")))
+            self._write("// {}".format(line))
         self._write()
         self._write('syntax = "proto3";')
         self._write()
