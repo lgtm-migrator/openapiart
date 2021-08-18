@@ -36,16 +36,17 @@ jobs:
           go get golang.org/x/tools/cmd/goimports
       - name: Install dependencies
         run: |
+          rm -rf .env
           python do.py setup
           python do.py init
       - name: Build distribution
         run: |
           python do.py dist
-      - name: Install package on clean env
-        run: |
-          rm -rf .env
-          python do.py setup
-          python do.py install
+      # - name: Install package on clean env
+      #   run: |
+      #     rm -rf .env
+      #     python do.py setup
+      #     python do.py install
       - name: Run artifact generation
         run: |
           python do.py generate
