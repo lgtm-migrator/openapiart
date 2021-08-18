@@ -39,15 +39,12 @@ jobs:
           rm -rf .env
           python do.py setup
           python do.py init
-          python do.py install
       - name: Build distribution
         run: |
           python do.py dist
-      # - name: Install package on clean env
-      #   run: |
-      #     rm -rf .env
-      #     python do.py setup
-      #     python do.py install
+      - name: Install package on clean env
+        run: |
+          python do.py install
       - name: Run artifact generation
         run: |
           python do.py generate
