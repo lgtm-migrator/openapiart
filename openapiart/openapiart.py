@@ -56,7 +56,7 @@ class OpenApiArt(object):
         try:
             response = requests.request("GET", self._bundler._content["info"]["license"]["url"])
             if response.ok:
-                self._license = response.text
+                self._license = response.text.encode()
             else:
                 self._license = "License: {}".format(self._bundler._content["info"]["license"]["url"])
         except Exception as e:
