@@ -39,6 +39,7 @@ jobs:
           rm -rf .env
           python do.py setup
           python do.py init
+          python do.py install
       - name: Build distribution
         run: |
           python do.py dist
