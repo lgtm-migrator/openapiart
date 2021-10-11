@@ -559,7 +559,7 @@ class OpenApiArtGo(OpenApiArtPlugin):
                 return &bodyString, nil"""
             else:
                 success_handling = """obj := api.{success_method}()
-                    if err := obj.StatusCode200().FromJson(string(bodyBytes)); err != nil {{
+                    if _, err := obj.StatusCode200().FromJson(string(bodyBytes)); err != nil {{
                         return nil, err
                     }}
                     err := obj.Validate()
@@ -737,20 +737,20 @@ class OpenApiArtGo(OpenApiArtPlugin):
                 return string(data)
             }}
 
-            func (obj *{struct}) FromJson(value string) error {{
+            func (obj *{struct}) FromJson(value string) ({interface}, error) {{
                 opts := protojson.UnmarshalOptions{{
                     AllowPartial: true,
                     DiscardUnknown: false,
                 }}
                 retObj := opts.Unmarshal([]byte(value), obj.Msg())
                 if retObj != nil {{
-                    return retObj
+                    return nil, retObj
                 }}
                 err := obj.Validate(true)
                 if err != nil {{
-                    return err
+                    return nil, err
                 }}
-                return retObj
+                return obj, nil
             }}
 
             func (obj *{struct}) Validate(defaults ...bool) error {{
@@ -774,7 +774,7 @@ class OpenApiArtGo(OpenApiArtPlugin):
             "ToJson() string",
             "FromPbText(value string) error",
             "FromYaml(value string) error",
-            "FromJson(value string) error",
+            f"FromJson(value string) ({new.interface}, error)",
             "Validate(defaults ...bool) error",
             "validateObj(set_default bool)",
             "setDefault()",

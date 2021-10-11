@@ -147,7 +147,7 @@ func TestValidJsonDecode(t *testing.T) {
 	api := openapiart.NewApi()
 	c1 := api.NewPrefixConfig()
 	input_str := `{"a":"ixia", "b" : 8.8, "c" : 1, "response" : "status_200", "required_object" : {"e_a": 1, "e_b": 2}}`
-	err := c1.FromJson(input_str)
+	_, err := c1.FromJson(input_str)
 	assert.Nil(t, err)
 }
 
@@ -156,7 +156,7 @@ func TestBadKeyJsonDecode(t *testing.T) {
 	api := openapiart.NewApi()
 	c1 := api.NewPrefixConfig()
 	input_str := `{"a":"ixia", "bz" : 8.8, "c" : 1, "response" : "status_200", "required_object" : {"e_a": 1, "e_b": 2}}`
-	err := c1.FromJson(input_str)
+	_, err := c1.FromJson(input_str)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), `unknown field "bz"`)
 }
@@ -166,7 +166,7 @@ func TestBadDatatypeJsonDecode(t *testing.T) {
 	api := openapiart.NewApi()
 	c1 := api.NewPrefixConfig()
 	input_str := `{"a":"ixia", "b" : "abc", "c" : 1, "response" : "status_200", "required_object" : {"e_a": 1, "e_b": 2}}`
-	err := c1.FromJson(input_str)
+	_, err := c1.FromJson(input_str)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), `invalid value for float type: "abc"`)
 }
@@ -176,7 +176,7 @@ func TestBadDatastructureJsonDecode(t *testing.T) {
 	api := openapiart.NewApi()
 	c1 := api.NewPrefixConfig()
 	input_str := `{"a":["ixia"], "b" : 9.9, "c" : 1, "response" : "status_200", "required_object" : {"e_a": 1, "e_b": 2}}`
-	err := c1.FromJson(input_str)
+	_, err := c1.FromJson(input_str)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), `invalid value for string type: [`)
 }
@@ -186,7 +186,7 @@ func TestWithoutValueJsonDecode(t *testing.T) {
 	api := openapiart.NewApi()
 	c1 := api.NewPrefixConfig()
 	input_str := `{"a": "ixia", "b" : 8.8, "c" : "", "response" : "status_200", "required_object" : {"e_a": 1, "e_b": 2}}`
-	err := c1.FromJson(input_str)
+	_, err := c1.FromJson(input_str)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), `invalid value for int32 type:`)
 }
