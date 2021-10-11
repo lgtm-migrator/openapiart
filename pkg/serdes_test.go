@@ -147,8 +147,12 @@ func TestValidJsonDecode(t *testing.T) {
 	api := openapiart.NewApi()
 	c1 := api.NewPrefixConfig()
 	input_str := `{"a":"ixia", "b" : 8.8, "c" : 1, "response" : "status_200", "required_object" : {"e_a": 1, "e_b": 2}}`
-	_, err := c1.FromJson(input_str)
+	obj, err := c1.FromJson(input_str)
 	assert.Nil(t, err)
+	assert.NotNil(t, obj)
+	assert.Equal(t, obj.A(), "ixia")
+	assert.Equal(t, obj.B(), float32(8.8))
+	assert.Equal(t, obj.RequiredObject().EB(), float64(2))
 }
 
 func TestBadKeyJsonDecode(t *testing.T) {
