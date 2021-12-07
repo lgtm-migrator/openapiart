@@ -688,8 +688,13 @@ class Generator(object):
         self._write()
         self._write(2, "Returns: %s" % type_name)
         self._write(2, '"""')
-        if len(self._get_parser("$..'type'").find(property)) > 0 and len(ref) == 0:
-            self._write(2, "return self._get_property('%s')" % (name))
+        if len(ref) > 0 and restriction.startswith("List["):
+            self._write(2, "return self._get_property('%s', %sIter, self._parent, self._choice)" % (name, class_name))
+        else:
+            if len(ref)>0:
+                self._write(2, "return self._get_property('%s', %s)" % (name, class_name))
+            else:
+                self._write(2, "return self._get_property('%s')" % (name))
             self._write()
             self._write(1, "@%s.setter" % name)
             self._write(1, "def %s(self, value):" % name)
@@ -703,11 +708,6 @@ class Generator(object):
                 self._write(2, "self._set_property('%s', value, '%s')" % (name, name))
             else:
                 self._write(2, "self._set_property('%s', value)" % (name))
-        elif len(ref) > 0:
-            if restriction.startswith("List["):
-                self._write(2, "return self._get_property('%s', %sIter, self._parent, self._choice)" % (name, class_name))
-            else:
-                self._write(2, "return self._get_property('%s', %s)" % (name, class_name))
 
     def _get_description(self, yobject):
         if "description" not in yobject:

@@ -84,3 +84,9 @@ def pb2():
 def pb2_grpc():
     """Returns pb2_grpc package"""
     return pytest.pb2_grpc_module
+
+
+@pytest.fixture(scope="session")
+def sanity():
+    """Returns sanity module"""
+    return pytest.module

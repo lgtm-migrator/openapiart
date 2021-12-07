@@ -186,3 +186,25 @@ def test_int_64_format(api, default_config):
         conf.validate()
     except TypeError as e:
         print(e)
+
+
+def test_setter_for_non_primitive(sanity):
+    expected = {'response': 'status_200',
+                'a': 'asdf', 'b': 1.1, 
+                'c': 1, 
+                'h': True, 
+                'required_object': 
+                    {'e_a': 10.45, 'e_b': 11.5}}
+    
+    eObject = sanity.EObject()
+    eObject.e_a = 10.45
+    eObject.e_b = 11.50
+
+    api = sanity.api()
+    config = api.prefix_config()
+    config.a = "asdf"
+    config.b = 1.1
+    config.c = 1
+    config.required_object = eObject
+
+    assert config.serialize(config.DICT) == expected
