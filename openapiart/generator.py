@@ -457,21 +457,21 @@ class Generator:
                 self._write(2, "response = json_format.MessageToDict(")
                 self._write(3, "res_obj, preserving_proto_field_name=True")
                 self._write(2, ")")
-                self._write(
-                    2, 'status_code_200 = response.get("status_code_200")'
-                )
-                self._write(2, "if status_code_200 is not None:")
+                # self._write(
+                #     2, 'status_code_200 = response.get("status_code_200")'
+                # )
+                self._write(2, "if response is not None:")
                 if return_byte:
                     self._write(
-                        3, "return io.BytesIO(res_obj.status_code_200)"
+                        3, "return io.BytesIO(res_obj)"
                     )
                 elif rpc_method.good_response_type:
                     if including_default:
-                        self._write(3, "if len(status_code_200) == 0:")
+                        self._write(3, "if len(response) == 0:")
                         self._write(
-                            4, "status_code_200 = json_format.MessageToDict("
+                            4, "response = json_format.MessageToDict("
                         )
-                        self._write(5, "res_obj.status_code_200,")
+                        self._write(5, "res_obj,")
                         self._write(5, "preserving_proto_field_name=True,")
                         self._write(5, "including_default_value_fields=True")
                         self._write(4, ")")
@@ -480,23 +480,23 @@ class Generator:
                         "return self.%s().deserialize("
                         % rpc_method.good_response_type,
                     )
-                    self._write(4, "status_code_200")
+                    self._write(4, "response")
                     self._write(3, ")")
                 else:
-                    self._write(3, 'return response.get("status_code_200")')
-                for rsp_code in rpc_method.bad_responses:
-                    self._write(
-                        2,
-                        """if response.get("status_code_{code}") is not None:""".format(
-                            code=rsp_code
-                        ),
-                    )
-                    self._write(
-                        3,
-                        """raise Exception({code}, response.get("status_code_{code}"))""".format(
-                            code=rsp_code
-                        ),
-                    )
+                    self._write(3, 'return response')
+                # for rsp_code in rpc_method.bad_responses:
+                #     self._write(
+                #         2,
+                #         """if response.get("status_code_{code}") is not None:""".format(
+                #             code=rsp_code
+                #         ),
+                #     )
+                #     self._write(
+                #         3,
+                #         """raise Exception({code}, response.get("status_code_{code}"))""".format(
+                #             code=rsp_code
+                #         ),
+                #     )
 
     def _process_good_response(self, rpc_method):
         including_default = False

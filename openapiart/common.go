@@ -10,6 +10,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+var transportType string = "grpc"
+
 type grpcTransport struct {
 	clientConnection *grpc.ClientConn
 	location         string
@@ -132,6 +134,7 @@ func (api *api) NewGrpcTransport() GrpcTransport {
 		dialTimeout:    10 * time.Second,
 	}
 	api.http = nil
+    transportType = "grpc"
 	return api.grpc
 }
 
@@ -152,6 +155,7 @@ func (api *api) NewHttpTransport() HttpTransport {
 		}
 	}
 	api.grpc = nil
+	transportType = "http"
 	return api.http
 }
 

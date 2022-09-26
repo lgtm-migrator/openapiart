@@ -21,6 +21,7 @@ class OpenApiArtProtobuf(OpenApiArtPlugin):
         self._errors = []
         self._openapi = openapi
         self._operations = {}
+        self._has_byte_response = False
         self._write_header(self._openapi["info"])
         for name, schema_object in self._openapi["components"][
             "schemas"
@@ -33,6 +34,7 @@ class OpenApiArtProtobuf(OpenApiArtPlugin):
         for _, path_object in self._openapi["paths"].items():
             self._write_request_msg(path_object)
             self._write_response_msg(path_object)
+        self._write_byte_response()
         self._validate_error()
         self._write_service()
         self._close_fp()
@@ -67,7 +69,25 @@ class OpenApiArtProtobuf(OpenApiArtPlugin):
                 operation = lambda x: None
                 operation.rpc = self._get_camel_case(operation_id)
                 operation.request = "google.protobuf.Empty"
-                operation.response = "{}Response".format(operation.rpc)
+                operation.http_response = "{}Response".format(operation.rpc)
+
+                binary_type = self._get_parser(
+                    "$..responses..'200'..schema..format"
+                ).find(path_item_object)
+                ref_type = self._get_parser(
+                    "$..responses..'200'..'$ref'"
+                ).find(path_item_object)
+                if len(binary_type) == 1:
+                    self._has_byte_response = True
+                    operation.grpc_response = "BytesResponse"
+                elif len(ref_type) == 1:
+                    operation.grpc_response = (
+                        self._get_schema_object_name_from_ref(
+                            self._resolve_response(ref_type)[0].value
+                        )
+                    )
+                else:
+                    operation.grpc_response = "*string"
                 operation.stream = (
                     len(
                         self._get_parser('$.."application/octet-stream"').find(
@@ -166,7 +186,7 @@ class OpenApiArtProtobuf(OpenApiArtPlugin):
                     else:
                         response_field.type = "string"
                     response_fields.append(response_field)
-            self._write("message {} {{".format(operation.response))
+            self._write("message {} {{".format(operation.http_response))
             for response_field in response_fields:
                 self._write(
                     "optional {} {} = {};".format(
@@ -178,6 +198,15 @@ class OpenApiArtProtobuf(OpenApiArtPlugin):
                 )
             self._write("}")
             self._write()
+
+    def _write_byte_response(self):
+        if self._has_byte_response:
+            self._write()
+            self._write("message BytesResponse {")
+            self._write(
+                "optional bytes value = 1;", indent=1
+            )
+            self._write("}")
 
     def _get_message_name(self, ref):
         return ref.split("/")[-1]
@@ -416,6 +445,6 @@ class OpenApiArtProtobuf(OpenApiArtPlugin):
             )
         )
         line = "rpc {}({}) returns ({}{});".format(
-            operation.rpc, operation.request, "", operation.response
+            operation.rpc, operation.request, "", operation.grpc_response
         )
         self._write(line, indent=1)

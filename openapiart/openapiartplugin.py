@@ -8,6 +8,7 @@ class OpenApiArtPlugin(object):
 
     def __init__(self, **kwargs):
         self._fp = None
+        self._openapi = None
         self._license = kwargs["license"]
         self._info = kwargs["info"]
         self._output_dir = kwargs["output_dir"]
@@ -78,3 +79,18 @@ class OpenApiArtPlugin(object):
                 + " */"
             )
         return "{}// ".format(indent) + "\n{}// ".format(indent).join(lines)
+
+    def _resolve_response(self, parser_result):
+        """returns the inner response type if any"""
+        if "/components/responses" in parser_result[0].value:
+            jsonpath = "$.{}..schema".format(
+                parser_result[0].value[2:].replace("/", ".")
+            )
+            schema = self._get_parser(jsonpath).find(self._openapi)[0].value
+            response_component_ref = self._get_parser("$..'$ref'").find(schema)
+            return response_component_ref
+        return parser_result
+
+    def _get_schema_object_name_from_ref(self, ref):
+        final_piece = ref.split("/")[-1]
+        return final_piece.replace(".", "")

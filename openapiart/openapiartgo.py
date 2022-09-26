@@ -156,6 +156,7 @@ class OpenApiArtGo(OpenApiArtPlugin):
         self._api = FluentStructure()
         self._api_interface_methods = []
         self._base_url = ""
+        self._error_responses = []
         self._proto_service = kwargs.get("proto_service")
         self._oapi_go_types = {
             "string": "string",
@@ -223,6 +224,7 @@ class OpenApiArtGo(OpenApiArtPlugin):
         self._write_common_code()
         self._write_types()
         self._build_api_interface()
+        self._build_error_responses()
         self._build_request_interfaces()
         self._write_component_interfaces()
         self._close_fp()
@@ -257,6 +259,7 @@ class OpenApiArtGo(OpenApiArtPlugin):
         self._write(line)
         self._write('import "google.golang.org/protobuf/types/known/emptypb"')
         self._write('import "google.golang.org/grpc"')
+        self._write('import gcodes "google.golang.org/grpc/codes"')
         self._write('import "google.golang.org/grpc/credentials/insecure"')
         self._write('import "github.com/ghodss/yaml"')
         self._write('import "google.golang.org/protobuf/encoding/protojson"')
@@ -740,35 +743,27 @@ class OpenApiArtGo(OpenApiArtPlugin):
                 )
             )
         for rpc in self._api.external_rpc_methods:
-            error_handling = ""
-            for response in rpc.responses:
-                if response.status_code.startswith("2"):
-                    continue
-                error_handling += """if resp.GetStatusCode_{status_code}() != nil {{
-                        data, _ := yaml.Marshal(resp.GetStatusCode_{status_code}())
-                        return nil, fmt.Errorf(string(data))
-                    }}
-                    """.format(
-                    status_code=response.status_code,
-                )
-            error_handling += 'return nil, fmt.Errorf("response of 200, 400, 500 has not been implemented")'
+            # error_handling = ""
+            # for response in rpc.responses:
+            #     if response.status_code.startswith("2"):
+            #         continue
+            #     error_handling += """if resp.GetStatusCode_{status_code}() != nil {{
+            #             data, _ := yaml.Marshal(resp.GetStatusCode_{status_code}())
+            #             return nil, fmt.Errorf(string(data))
+            #         }}
+            #         """.format(
+            #         status_code=response.status_code,
+            #     )
+            # error_handling += 'return nil, fmt.Errorf("response of 200, 400, 500 has not been implemented")'
             if rpc.request_return_type == "[]byte":
-                return_value = """if resp.GetStatusCode_200() != nil {
-                        return resp.GetStatusCode_200(), nil
-                    }"""
+                response_msg = """resp := grpcResp.Value"""
             elif rpc.request_return_type == "*string":
-                return_value = """if resp.GetStatusCode_200() != "" {
-                        status_code_value := resp.GetStatusCode_200()
-                        return &status_code_value, nil
-                    }"""
+                response_msg = """resp := &grpcResp"""
             else:
-                return_value = """if resp.GetStatusCode_200() != nil {{
-                        return New{struct}().SetMsg(resp.GetStatusCode_200()), nil
-                    }}""".format(
-                    struct=self._get_external_struct_name(
-                        rpc.request_return_type
-                    ),
+                response_msg = """resp := New{request_return_type}().SetMsg(grpcResp)""".format(
+                    request_return_type=rpc.request_return_type,
                 )
+
             self._write(
                 """func (api *{internal_struct_name}) {method} {{
                     {validate}
@@ -782,20 +777,19 @@ class OpenApiArtGo(OpenApiArtPlugin):
                     request := {request}
                     ctx, cancelFunc := context.WithTimeout(context.Background(), api.grpc.requestTimeout)
                     defer cancelFunc()
-                    resp, err := api.grpcClient.{operation_name}(ctx, &request)
+                    grpcResp, err := api.grpcClient.{operation_name}(ctx, &request)
                     if err != nil {{
                         return nil, err
                     }}
-                    {return_value}
-                    {error_handling}
+                    {response_msg}
+                    return resp, nil
                 }}
                 """.format(
                     internal_struct_name=self._api.internal_struct_name,
                     method=rpc.method,
                     request=rpc.request,
                     operation_name=rpc.operation_name,
-                    error_handling=error_handling,
-                    return_value=return_value,
+                    response_msg=response_msg,
                     http_call=rpc.http_call,
                     validate=getattr(rpc, "validate", ""),
                 )
@@ -809,10 +803,19 @@ class OpenApiArtGo(OpenApiArtPlugin):
                     success_method = response.request_return_type
                 else:
                     error_handling += """if resp.StatusCode == {status_code} {{
-                            return nil, fmt.Errorf(string(bodyBytes))
-                        }}
-                        """.format(
+                        obj := api.{request_return_type}().StatusCode{status_code}()
+                            if err := obj.FromJson(string(bodyBytes)); err != nil {{
+                                return nil, err
+                            }}
+                            custmErr, err :=obj.ToError()
+                            if err != nil {{
+                                return nil, err
+                            }}
+                            return nil, custmErr                        
+                    }}
+                    """.format(
                         status_code=response.status_code,
+                        request_return_type=response.request_return_type
                     )
             error_handling += (
                 'return nil, fmt.Errorf("response not implemented")'
@@ -886,6 +889,7 @@ class OpenApiArtGo(OpenApiArtPlugin):
                 properties[
                     "status_code_{}".format(response.status_code)
                 ] = response.schema
+                self._build_response_type_object_interface(response.schema)
             new.schema_object["properties"] = properties
             new.struct = "{operation_name}Response".format(
                 operation_name=self._get_internal_name(rpc.operation_name),
@@ -907,6 +911,64 @@ class OpenApiArtGo(OpenApiArtPlugin):
             new.schema_name = self._get_external_struct_name(new.interface)
             # new.isRpcResponse = True
             self._api.external_new_methods.append(new)
+
+    def _build_response_type_object_interface(self, response):
+        ref = self._get_parser("$..'$ref'").find(response)
+        if len(ref) != 1:
+            return
+        new = FluentNew()
+        new.schema_name = self._get_schema_object_name_from_ref(
+            ref[0].value
+        )
+        new.schema_object = self._get_schema_object_from_ref(
+            ref[0].value
+        )
+        new.interface = self._get_external_struct_name(
+            new.schema_name
+        )
+        new.struct = self._get_internal_name(new.schema_name)
+        new.description = self._get_description(
+            new.schema_object, True
+        )
+        new.method_description = """// New{interface} returns a new instance of {interface}.
+        """.format(
+            interface=new.interface
+        ) + "// {} is {}".format(
+            new.interface,
+            self._get_description(new.schema_object, True).lstrip(
+                "// "
+            ),
+        )
+        new.method = """New{interface}() {interface}""".format(
+            interface=new.interface
+        )
+        if (
+                len(
+                    [
+                        m
+                        for m in self._api.external_new_methods
+                        if m.schema_name == new.schema_name
+                    ]
+                )
+                == 0
+        ):
+            self._api.external_new_methods.append(new)
+
+    def _build_error_responses(self):
+        for http in self._api.internal_http_methods:
+            for response in http.responses:
+                status_code = response.status_code
+                if status_code.startswith("2"):
+                    continue
+                rsp_ref = self._get_parser("$..'$ref'").find(
+                    response.schema)
+                if len(rsp_ref) == 0:
+                    continue
+                rsp_interface = self._get_schema_object_name_from_ref(
+                    rsp_ref[0].value
+                )
+                if rsp_interface not in self._error_responses:
+                    self._error_responses.append(rsp_interface)
 
     def _write_interface(self, new):
         if new.schema_name in self._api.components:
@@ -939,6 +1001,7 @@ class OpenApiArtGo(OpenApiArtPlugin):
                 internal_items_nil.append(
                     "obj.{} = nil".format(self._get_holder_name(field))
                 )
+
         self._write(
             """
             // ***** {interface} *****
@@ -1138,6 +1201,88 @@ class OpenApiArtGo(OpenApiArtPlugin):
                     nil_items="\n".join(internal_items_nil), struct=new.struct
                 )
             )
+        if new.interface in self._error_responses:
+            self._write(
+                """
+                func (obj *{struct}) ToError() (error, error) {{
+                    if transportType == "grpc" {{
+                        switch obj.StatusCode() {{
+                        case {interface}StatusCode.FAILED_PRECONDITION:
+                            grpcError := status.Newf(gcodes.FailedPrecondition, obj.String())
+                            detailsError, err := grpcError.WithDetails(obj.obj)
+                            if err != nil {{
+                                return nil, err
+                            }}
+                            return detailsError.Err(), nil
+                        case {interface}StatusCode.INTERNAL:
+                            grpcError := status.Newf(gcodes.Internal, obj.String())
+                            detailsError, err := grpcError.WithDetails(obj.obj)
+                            if err != nil {{
+                                return nil, err
+                            }}
+                            return detailsError.Err(), nil
+                        default:
+                            return nil, grpc.Errorf(gcodes.NotFound, obj.String())
+                        }}
+                    }} else {{
+                        return obj, nil
+                    }}
+                }}
+                """.format(
+                    struct=new.struct,
+                    pb_pkg_name=self._protobuf_package_name,
+                    interface=new.interface,
+                )
+            )
+
+            self._write(
+                """
+                func (obj *{struct}) FromError(err error) error {{
+                    if err == nil {{
+                        return fmt.Errorf("error must be have some value, not nil")
+                    }}
+                    if transportType == "grpc" {{
+                        if grpcError, ok := status.FromError(err); ok {{
+                            grpcCode := grpcError.Code()
+                            if grpcCode == gcodes.FailedPrecondition || grpcCode == gcodes.Internal {{
+                                detailsError := grpcError.Details()
+                                if len(detailsError) == 0 {{
+                                    return fmt.Errorf("Details must be present within gRPC Error")
+                                }}
+                                details := detailsError[0].(*{pb_pkg_name}.{interface})
+                                obj.FromProto(details)                            
+                            }} else {{
+                                return fmt.Errorf("%s is not a supported error code", grpcCode)
+                            }}
+                        }} else {{
+                            return fmt.Errorf("Error must be a gRPC Error")
+                        }}
+                    }} else {{
+                        httpError := err.(*responseError)
+                        if _, protoErr := obj.FromProto(httpError.obj); protoErr != nil {{
+                            return protoErr
+                        }} 
+                    }}
+                    return nil
+                }}
+                """.format(
+                    struct=new.struct,
+                    pb_pkg_name=self._protobuf_package_name,
+                    interface=new.interface,
+                )
+            )
+
+            self._write(
+                """
+                func (obj *{struct}) Error() string {{
+                    return fmt.Sprintf("code = %s desc = %s", obj.obj.StatusCode, obj.String())
+                }}
+                """.format(
+                    struct=new.struct,
+                    pb_pkg_name=self._protobuf_package_name,
+                    interface=new.interface,
+                )
+            )
 
         interfaces = [
             "// ToProto marshals {interface} to protobuf object *{pb_pkg_name}.{interface}",
@@ -1166,6 +1311,16 @@ class OpenApiArtGo(OpenApiArtPlugin):
             "validateObj(set_default bool)",
             "setDefault()",
         ]
+        if new.interface in self._error_responses:
+            interfaces.extend([
+                "// return gRPC status code, message and details when transport is gRPC",
+                "// return Error interface when transport is HTTP",
+                "ToError() (error, error)",
+                "// Unmarshal gRPC status to ResponseError when transport is gRPC",
+                "// Unmarshal error to ResponseError  when transport is HTTP",
+                "FromError(err error) error",
+            ])
+
         for field in new.interface_fields:
             interfaces.append("// {}".format(field.getter_method_description))
             interfaces.append(field.getter_method)
@@ -2433,9 +2588,9 @@ class OpenApiArtGo(OpenApiArtPlugin):
             )
         )
 
-    def _get_schema_object_name_from_ref(self, ref):
-        final_piece = ref.split("/")[-1]
-        return final_piece.replace(".", "")
+    # def _get_schema_object_name_from_ref(self, ref):
+    #     final_piece = ref.split("/")[-1]
+    #     return final_piece.replace(".", "")
 
     def _get_schema_object_from_ref(self, ref):
         leaf = self._openapi
